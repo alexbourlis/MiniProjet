@@ -62,7 +62,7 @@ int main(void)
 	//start proximity detector
 	proximity_start();
 
-	palClearPad(GPIOD, GPIOD_LED5);
+	palClearPad(GPIOD, GPIOD_LED7);
 
     /* Infinite loop. */
     while (1) {
