@@ -54,5 +54,5 @@ Mkfile.old
 dkms.conf
 
 #en plus
-.cproject
-.project
+#.cproject
+#.project
