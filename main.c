@@ -13,11 +13,18 @@
 #include <sensors/proximity.h>
 #include <arm_math.h>
 
+#include <process_image.h>
 
 messagebus_t bus;
 MUTEX_DECL(bus_lock);
 CONDVAR_DECL(bus_condvar);
 
+void SendUint8ToComputer(uint8_t* data, uint16_t size)
+{
+	chSequentialStreamWrite((BaseSequentialStream *)&SD3, (uint8_t*)"START", 5);
+	chSequentialStreamWrite((BaseSequentialStream *)&SD3, (uint8_t*)&size, sizeof(uint16_t));
+	chSequentialStreamWrite((BaseSequentialStream *)&SD3, (uint8_t*)data, size);
+}
 
 static void serial_start(void)
 {
@@ -51,6 +58,7 @@ int main(void)
 {
 	halInit();
 	chSysInit();
+	mpu_init();
 
 	 /** Inits the Inter Process Communication bus. */
 	messagebus_init(&bus, &bus_lock, &bus_condvar);
@@ -59,15 +67,20 @@ int main(void)
 	serial_start();
 	//start the USB communication
 	usb_start();
-	//start proximity detector
-	proximity_start();
+	//starts the camera
+	dcmi_start();
+	po8030_start();
+	//po8030_set_awb(0);
+	//po8030_set_rgb_gain(0x40, 0xFF, 0x40);
 
 	palClearPad(GPIOD, GPIOD_LED7);
+	//stars the threads for the pi regulator and the processing of the image
+	process_image_start();
 
     /* Infinite loop. */
     while (1) {
-    	chprintf((BaseSequentialStream *)&SD3, "VALUE = %d \n", get_calibrated_prox(0));
-    	//chThdSleepMilliseconds(1000);
+    	//chprintf((BaseSequentialStream *)&SD3, "VALUE = %d \n", get_calibrated_prox(0));
+    	chThdSleepMilliseconds(1000);
 
     }
 }
