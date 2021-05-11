@@ -15,6 +15,7 @@ static uint16_t line_position = IMAGE_BUFFER_SIZE/2;	//middle
 static uint16_t lineWidth_red = 0;
 static uint16_t lineWidth_blue = 0;
 static uint16_t lineWidth_green = 0;
+static uint8_t color_detected = 0;
 
 //semaphore
 static BSEMAPHORE_DECL(image_ready_sem, TRUE);
@@ -38,7 +39,7 @@ uint8_t get_color(void){
 	}else if(lineWidth_blue>0){
 		return YELLOW;
 	}else{
-		return NONE;
+		return WHITE;
 	}
 }
 
@@ -156,7 +157,6 @@ static THD_FUNCTION(ProcessImage, arg) {
 	uint8_t red[IMAGE_BUFFER_SIZE] = {0};
 	uint8_t blue[IMAGE_BUFFER_SIZE] = {0};
 	uint8_t green[IMAGE_BUFFER_SIZE] = {0};
-	uint8_t color = 0;
 	uint8_t counter[NUM_COLORS] = {0};
 	
 	static uint8_t batch_counter = 0;
@@ -184,23 +184,24 @@ static THD_FUNCTION(ProcessImage, arg) {
 		lineWidth_green = extract_line_width(green);
 		
 		//returns color
-		color = get_color();
+		color_detected = get_color();
 		if(batch_counter<10){
-			if (color == BLACK){ counter[BLACK]++; }
-			else if (color == RED){ counter[RED]++; }
-			else if (color == YELLOW){ counter[YELLOW]++; }
-			else if (color == BLUE){ counter[BLUE]++; }
+			if (color_detected == BLACK){ counter[BLACK]++; }
+			else if (color_detected == RED){ counter[RED]++; }
+			else if (color_detected == YELLOW){ counter[YELLOW]++; }
+			else if (color_detected == BLUE){ counter[BLUE]++; }
+			else if (color_detected == WHITE){ counter[WHITE]++; }
 			batch_counter++;
 		}else{
-			color = get_dominant_color(counter);
-			if (color == BLACK){ chprintf((BaseSequentialStream *)&SDU1, "black\t"); }
-			else if (color == RED){ chprintf((BaseSequentialStream *)&SDU1, "RED\t"); }
-			else if (color == YELLOW){ chprintf((BaseSequentialStream *)&SDU1, "YELLOW\t"); }
-			else if (color == BLUE){ chprintf((BaseSequentialStream *)&SDU1, "BLUE\t"); }
-			else{ chprintf((BaseSequentialStream *)&SDU1, "not recognized\t"); }
-			batch_counter=0;
+			color_detected = get_dominant_color(counter);
+			/*if (color_detected == BLACK){ chprintf((BaseSequentialStream *)&SDU1, "black\t"); }
+			else if (color_detected == RED){ chprintf((BaseSequentialStream *)&SDU1, "RED\t"); }
+			else if (color_detected == YELLOW){ chprintf((BaseSequentialStream *)&SDU1, "YELLOW\t"); }
+			else if (color_detected == BLUE){ chprintf((BaseSequentialStream *)&SDU1, "BLUE\t"); }
+			else if(color_detected==WHITE){ chprintf((BaseSequentialStream *)&SDU1, "WHITE\t"); }*/
+			batch_counter=0; //reset the batch counter
 			for (uint8_t i = 0; i<NUM_COLORS; i++){
-				counter[i]=0;
+				counter[i]=0; //reset all the counters for the colors
 			}
 		}
 		//chprintf((BaseSequentialStream *)&SDU1, "red width = %d,  green width = %d,  blue width = %d \n", 
@@ -237,6 +238,10 @@ uint8_t get_dominant_color(uint8_t * list){
 		}
 	}
 	return dominant_color;
+}
+
+uint16_t get_color_pid(void){
+	return color_detected;
 }
 
 void process_image_start(void){

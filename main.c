@@ -14,6 +14,8 @@
 #include <arm_math.h>
 
 #include <process_image.h>
+#include <pi_regulator.h>
+#include "sensors/VL53L0X/VL53L0X.h"
 
 messagebus_t bus;
 MUTEX_DECL(bus_lock);
@@ -73,13 +75,23 @@ int main(void)
 	//po8030_set_awb(0);
 	//po8030_set_rgb_gain(0x40, 0xFF, 0x40);
 
+	//starts the time of flight sensor
+	VL53L0X_start();
+
+	//initializes the motors
+	motors_init();
+
 	palClearPad(GPIOD, GPIOD_LED7);
-	//stars the threads for the pi regulator and the processing of the image
+	//starts the threads for the pi regulator and the processing of the image
+	pi_regulator_start();
 	process_image_start();
+
+
+
 
     /* Infinite loop. */
     while (1) {
-    	//chprintf((BaseSequentialStream *)&SD3, "VALUE = %d \n", get_calibrated_prox(0));
+    	//chprintf((BaseSequentialStream *)&SDU1, "Distance = %d \n", VL53L0X_get_dist_mm());
     	chThdSleepMilliseconds(1000);
 
     }
