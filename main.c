@@ -7,8 +7,10 @@
 #include "memory_protection.h"
 #include <usbcfg.h>
 #include <main.h>
+#include <spi_comm.h>
 #include <chprintf.h>
 #include <motors.h>
+#include <button.h>
 #include <audio/microphone.h>
 #include <sensors/proximity.h>
 #include <arm_math.h>
@@ -17,9 +19,10 @@
 #include <pi_regulator.h>
 #include "sensors/VL53L0X/VL53L0X.h"
 
-messagebus_t bus;
+/*messagebus_t bus;
 MUTEX_DECL(bus_lock);
-CONDVAR_DECL(bus_condvar);
+CONDVAR_DECL(bus_condvar);*/
+static uint8_t play = STOP;
 
 void SendUint8ToComputer(uint8_t* data, uint16_t size)
 {
@@ -55,6 +58,15 @@ static void serial_start(void)
 //    //let the timer count to max value
 //    gptStartContinuous(&GPTD12, 0xFFFF);
 //}
+uint8_t get_game_state(void)
+{
+	return play;
+}
+
+void set_game_state(uint8_t state)
+{
+	play = state;
+}
 
 int main(void)
 {
@@ -63,12 +75,14 @@ int main(void)
 	mpu_init();
 
 	 /** Inits the Inter Process Communication bus. */
-	messagebus_init(&bus, &bus_lock, &bus_condvar);
+	//messagebus_init(&bus, &bus_lock, &bus_condvar);
 
 	//starts the serial communication
 	serial_start();
 	//start the USB communication
 	usb_start();
+	//starts the SPI communication
+	spi_comm_start();
 	//starts the camera
 	dcmi_start();
 	po8030_start();
@@ -86,14 +100,26 @@ int main(void)
 	pi_regulator_start();
 	process_image_start();
 
-
-
+	bool play_flag = true;
 
     /* Infinite loop. */
     while (1) {
-    	//chprintf((BaseSequentialStream *)&SDU1, "Distance = %d \n", VL53L0X_get_dist_mm());
-    	chThdSleepMilliseconds(1000);
-
+    	//chprintf((BaseSequentialStream *)&SDU1, "button state = %d \n", button_is_pressed());
+    	if(button_is_pressed())
+    	{
+    		if(play_flag){
+    			chThdSleepMilliseconds(500); //let the player start the robot
+    			play = START;
+    			play_flag = false;
+    			chThdSleepMilliseconds(1000); //prevents from stoping the game too fast
+    		}else{
+    			play = STOP;
+    			play_flag = true;
+    			chThdSleepMilliseconds(1000); //prevents from restarting the game too fast
+    		}
+    		
+    	}
+    	chThdSleepMilliseconds(200);
     }
 }
 

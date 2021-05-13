@@ -11,12 +11,15 @@
 
 //static float distance_cm = 0;
 static uint16_t line_position = IMAGE_BUFFER_SIZE/2;	//middle
+static uint16_t line_position_r = IMAGE_BUFFER_SIZE/2;
+static uint16_t line_position_g = IMAGE_BUFFER_SIZE/2;
+static uint16_t line_position_b = IMAGE_BUFFER_SIZE/2;
 
 static uint16_t lineWidth_red = 0;
 static uint16_t lineWidth_blue = 0;
 static uint16_t lineWidth_green = 0;
-static uint8_t color_detected = 0;
-
+static uint8_t color_detected = WHITE;
+static bool color_retrieved = false; 
 //semaphore
 static BSEMAPHORE_DECL(image_ready_sem, TRUE);
 
@@ -26,11 +29,15 @@ static BSEMAPHORE_DECL(image_ready_sem, TRUE);
  */
 
 //returns the color seen by the camera (choices between: red,blue,yellow,black)
-uint8_t get_color(void){
+uint8_t compute_color(void){
 	//uint8_t mean = ((uint16_t)lineWidth_red+(uint16_t)lineWidth_blue+(uint16_t)lineWidth_green)/3;
 	if(lineWidth_red>0){
 		if(lineWidth_blue>0){
-			return BLACK;
+			if(lineWidth_green>0){
+				return BLACK;
+			}else{
+				return GREEN;
+			}
 		}else{
 			return BLUE;
 		}
@@ -110,6 +117,7 @@ uint16_t extract_line_width(uint8_t *buffer){
 		begin = 0;
 		end = 0;
 		width = 0;//last_width;
+		line_position = IMAGE_BUFFER_SIZE/2 - EMPIRICAL_CORRECTION;
 	}else{
 		/*last_width =*/ width = (end - begin);
 		line_position = (begin + end)/2; //gives the line position.
@@ -136,13 +144,19 @@ static THD_FUNCTION(CaptureImage, arg) {
 	dcmi_set_capture_mode(CAPTURE_ONE_SHOT);
 	dcmi_prepare();
 
+	//systime_t time;
+
     while(1){
+    	//compute threads execution time
+		//time = chVTGetSystemTime();
         //starts a capture
 		dcmi_capture_start();
 		//waits for the capture to be done
 		wait_image_ready();
 		//signals an image has been captured
 		chBSemSignal(&image_ready_sem);
+		//
+		//chprintf((BaseSequentialStream *)&SDU1, "capture time = %d\n", chVTGetSystemTime()-time);
     }
 }
 
@@ -157,15 +171,21 @@ static THD_FUNCTION(ProcessImage, arg) {
 	uint8_t red[IMAGE_BUFFER_SIZE] = {0};
 	uint8_t blue[IMAGE_BUFFER_SIZE] = {0};
 	uint8_t green[IMAGE_BUFFER_SIZE] = {0};
-	uint8_t counter[NUM_COLORS] = {0};
+	//uint8_t counter[NUM_COLORS] = {0};
 	
-	static uint8_t batch_counter = 0;
-
+	//static uint8_t batch_counter = 0;
+	//uint8_t current_color = WHITE;
 	bool send_to_computer = true;
+
+	systime_t time;
 
     while(1){
     	//waits until an image has been captured
+    	
         chBSemWait(&image_ready_sem);
+        time = chVTGetSystemTime();
+
+        //chprintf((BaseSequentialStream *)&SD3, "capture time = %d\n", chVTGetSystemTime()-time);
 		//gets the pointer to the array filled with the last image in RGB565    
 		img_buff_ptr = dcmi_get_last_image_ptr();
 
@@ -180,30 +200,39 @@ static THD_FUNCTION(ProcessImage, arg) {
 
 		//search for a line in the image and gets its width in pixels
 		lineWidth_red = extract_line_width(red);
-		lineWidth_blue = extract_line_width(blue);
+		line_position_r = line_position;
 		lineWidth_green = extract_line_width(green);
+		line_position_g = line_position;
+		lineWidth_blue = extract_line_width(blue);
+		line_position_b = line_position;
 		
+		//chprintf((BaseSequentialStream *)&SDU1, "blue line position = %d\t", line_position);
 		//returns color
-		color_detected = get_color();
-		if(batch_counter<10){
-			if (color_detected == BLACK){ counter[BLACK]++; }
-			else if (color_detected == RED){ counter[RED]++; }
-			else if (color_detected == YELLOW){ counter[YELLOW]++; }
-			else if (color_detected == BLUE){ counter[BLUE]++; }
-			else if (color_detected == WHITE){ counter[WHITE]++; }
+		/*current_color = get_color();
+		if(batch_counter<1){
+			if (current_color == BLACK){ counter[BLACK]++; }
+			else if (current_color == RED){ counter[RED]++; }
+			else if (current_color == YELLOW){ counter[YELLOW]++; }
+			else if (current_color == BLUE){ counter[BLUE]++; }
+			else if (current_color == GREEN){ counter[GREEN]++; }
+			else if (current_color == WHITE){ counter[WHITE]++; }
 			batch_counter++;
-		}else{
-			color_detected = get_dominant_color(counter);
-			/*if (color_detected == BLACK){ chprintf((BaseSequentialStream *)&SDU1, "black\t"); }
-			else if (color_detected == RED){ chprintf((BaseSequentialStream *)&SDU1, "RED\t"); }
-			else if (color_detected == YELLOW){ chprintf((BaseSequentialStream *)&SDU1, "YELLOW\t"); }
-			else if (color_detected == BLUE){ chprintf((BaseSequentialStream *)&SDU1, "BLUE\t"); }
-			else if(color_detected==WHITE){ chprintf((BaseSequentialStream *)&SDU1, "WHITE\t"); }*/
-			batch_counter=0; //reset the batch counter
-			for (uint8_t i = 0; i<NUM_COLORS; i++){
-				counter[i]=0; //reset all the counters for the colors
-			}
-		}
+		}*/
+		//if(batch_counter==1){
+		color_detected = compute_color();
+		color_retrieved = false;
+		/*if (color_detected == BLACK){ chprintf((BaseSequentialStream *)&SD3, "black\t"); }
+		else if (color_detected == RED){ chprintf((BaseSequentialStream *)&SD3, "RED\t"); }
+		else if (color_detected == YELLOW){ chprintf((BaseSequentialStream *)&SD3, "YELLOW\t"); }
+		else if (color_detected == BLUE){ chprintf((BaseSequentialStream *)&SD3, "BLUE\t"); }
+		else if (color_detected == GREEN){ chprintf((BaseSequentialStream *)&SD3, "GREEN\t"); }
+		else if(color_detected==WHITE){ chprintf((BaseSequentialStream *)&SD3, "WHITE\t"); }
+		chprintf((BaseSequentialStream *)&SD3, "\n");*/
+		/*batch_counter=0; //reset the batch counter
+		for (uint8_t i = 0; i<NUM_COLORS; i++){
+			counter[i]=0; //reset all the counters for the colors
+		}*/
+		//}
 		//chprintf((BaseSequentialStream *)&SDU1, "red width = %d,  green width = %d,  blue width = %d \n", 
 												//lineWidth_red, lineWidth_green, lineWidth_blue);
 		//converts the width into a distance between the robot and the camera
@@ -211,12 +240,14 @@ static THD_FUNCTION(ProcessImage, arg) {
 		//	distance_cm = PXTOCM/lineWidth;
 		//}
 
-		if(send_to_computer){
+		/*if(send_to_computer){
 			//sends to the computer the image
-			SendUint8ToComputer(green, IMAGE_BUFFER_SIZE);
+			SendUint8ToComputer(blue, IMAGE_BUFFER_SIZE);
 		}
 		//invert the bool
-		send_to_computer = !send_to_computer;
+		send_to_computer = !send_to_computer;*/
+
+		//chprintf((BaseSequentialStream *)&SD3, "capture time = %d\n", chVTGetSystemTime()-time);
     }
 }
 
@@ -228,7 +259,7 @@ uint16_t get_line_position(void){
 	return line_position;
 }
 
-uint8_t get_dominant_color(uint8_t * list){
+/*uint8_t get_dominant_color(uint8_t * list){
 	uint8_t dominant_color = 0;
 	uint8_t color_count = 0;
 	for (uint8_t i =0; i < NUM_COLORS; i++){
@@ -238,10 +269,16 @@ uint8_t get_dominant_color(uint8_t * list){
 		}
 	}
 	return dominant_color;
-}
+}*/
 
-uint16_t get_color_pid(void){
-	return color_detected;
+uint16_t get_color(void){
+	if(color_retrieved == false){
+		color_retrieved = true;
+		return color_detected;
+	}else{
+		return OLD_COLOR;
+	}
+	
 }
 
 void process_image_start(void){
