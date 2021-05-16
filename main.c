@@ -8,28 +8,17 @@
 #include <usbcfg.h>
 #include <main.h>
 #include <spi_comm.h>
-#include <chprintf.h>
 #include <motors.h>
 #include <button.h>
-#include <audio/microphone.h>
-#include <sensors/proximity.h>
-#include <arm_math.h>
+#include <leds.h>
 
-#include <process_image.h>
-#include <pi_regulator.h>
+#include <color_detection.h>
+#include <robot_movement.h>
 #include "sensors/VL53L0X/VL53L0X.h"
+#include <audio/audio_thread.h>
+#include "audio/play_melody.h"
 
-/*messagebus_t bus;
-MUTEX_DECL(bus_lock);
-CONDVAR_DECL(bus_condvar);*/
 static uint8_t play = STOP;
-
-void SendUint8ToComputer(uint8_t* data, uint16_t size)
-{
-	chSequentialStreamWrite((BaseSequentialStream *)&SD3, (uint8_t*)"START", 5);
-	chSequentialStreamWrite((BaseSequentialStream *)&SD3, (uint8_t*)&size, sizeof(uint16_t));
-	chSequentialStreamWrite((BaseSequentialStream *)&SD3, (uint8_t*)data, size);
-}
 
 static void serial_start(void)
 {
@@ -43,21 +32,6 @@ static void serial_start(void)
 	sdStart(&SD3, &ser_cfg); // UART3.
 }
 
-//static void timer12_start(void){
-//    //General Purpose Timer configuration
-//    //timer 12 is a 16 bit timer so we can measure time
-//    //to about 65ms with a 1Mhz counter
-//    static const GPTConfig gpt12cfg = {
-//        1000000,        /* 1MHz timer clock in order to measure uS.*/
-//        NULL,           /* Timer callback.*/
-//        0,
-//        0
-//    };
-//
-//    gptStart(&GPTD12, &gpt12cfg);
-//    //let the timer count to max value
-//    gptStartContinuous(&GPTD12, 0xFFFF);
-//}
 uint8_t get_game_state(void)
 {
 	return play;
@@ -66,6 +40,11 @@ uint8_t get_game_state(void)
 void set_game_state(uint8_t state)
 {
 	play = state;
+}
+
+void end_melody(void)
+{
+	playMelody(SEVEN_NATION_ARMY, ML_SIMPLE_PLAY, NULL);
 }
 
 int main(void)
@@ -86,8 +65,10 @@ int main(void)
 	//starts the camera
 	dcmi_start();
 	po8030_start();
-	//po8030_set_awb(0);
-	//po8030_set_rgb_gain(0x40, 0xFF, 0x40);
+	po8030_set_awb(0);
+	//starts the speaker
+	dac_start();
+	playMelodyStart();
 
 	//starts the time of flight sensor
 	VL53L0X_start();
@@ -95,31 +76,25 @@ int main(void)
 	//initializes the motors
 	motors_init();
 
-	palClearPad(GPIOD, GPIOD_LED7);
-	//starts the threads for the pi regulator and the processing of the image
-	pi_regulator_start();
+	//starts the threads for robot_movement and the processing of the image
+	robot_movement_start();
 	process_image_start();
-
-	bool play_flag = true;
 
     /* Infinite loop. */
     while (1) {
-    	//chprintf((BaseSequentialStream *)&SDU1, "button state = %d \n", button_is_pressed());
     	if(button_is_pressed())
     	{
-    		if(play_flag){
+    		if(!play){
     			chThdSleepMilliseconds(500); //let the player start the robot
     			play = START;
-    			play_flag = false;
-    			chThdSleepMilliseconds(1000); //prevents from stoping the game too fast
+    			chThdSleepMilliseconds(1000); //prevents from stoping the game by releasing the button too late
     		}else{
     			play = STOP;
-    			play_flag = true;
-    			chThdSleepMilliseconds(1000); //prevents from restarting the game too fast
+    			chThdSleepMilliseconds(1000); //prevents from restarting the game by releasing the button too late
     		}
     		
     	}
-    	chThdSleepMilliseconds(200);
+    	chThdSleepMilliseconds(100);
     }
 }
 

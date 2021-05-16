@@ -12,28 +12,30 @@ extern "C" {
 //constants for the differents parts of the project
 #define IMAGE_BUFFER_SIZE		640
 #define WIDTH_SLOPE				5
-#define MIN_LINE_WIDTH			40
+#define MIN_LINE_WIDTH			100
 #define CORRECTION_THRESHOLD	10
-#define ROTATION_COEFF			2
-#define PXTOCM					1570.0f //experimental value
-#define GOAL_DISTANCE 			10.0f
-#define MAX_DISTANCE 			25.0f
 #define ERROR_THRESHOLD			0.1f	//[cm] because of the noise of the camera
 #define KP						500.0f
 #define KI 						0.5f	//must not be zero
 #define MAX_SUM_ERROR 			100
-#define START					1		//the game is on
 #define STOP  					0		//the game is paused
+#define START					1		//the game is on
 #define ALIGNEMENT_THRESHOLD	10
- 
+#define FINAL_SCORE				2
+
 /** Robot wide IPC bus. */
 extern messagebus_t bus;
 
 extern parameter_namespace_t parameter_root;
-
-void SendUint8ToComputer(uint8_t* data, uint16_t size);
+/**returns the game state: either START or STOP
+ */
 uint8_t get_game_state(void);
+/**sets the game state: either START or STOP
+ */
 void set_game_state(uint8_t state);
+/**plays a small melody for the end of the game
+ */
+void end_melody(void);
 
 #ifdef __cplusplus
 }
